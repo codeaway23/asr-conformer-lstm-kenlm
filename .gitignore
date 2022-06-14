@@ -1,0 +1,6 @@
+wandb/
+models/
+librispeech/
+__pycache__/
+
+README.md
