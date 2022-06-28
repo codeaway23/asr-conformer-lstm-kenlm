@@ -1,5 +1,5 @@
-from torch.nn import LSTM, Linear, LogSoftmax, Module, ReLU
 from torchaudio.models import Conformer
+from torch.nn import LSTM, Linear, LogSoftmax, Module, ReLU
 
 from constants import *
 

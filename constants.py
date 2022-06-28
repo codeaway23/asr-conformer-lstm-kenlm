@@ -1,3 +1,6 @@
+import os
+import shutil
+import pandas as pd
 from torch import manual_seed, device
 
 # waveform
@@ -12,16 +15,23 @@ num_freq_masks = 2
 
 
 # text
-charlist = list(" abcdefghijklmnopqrstuvwxyz0123456789,'\"")
-pad_val = 0
-blank = len(charlist) + 1
-if blank == pad_val:
-    n_classes = len(charlist) + 1
-else:
-    n_classes = len(charlist) + 2
-decode_collapse = True
+charlist = list("-|etaonihsrdlumwcfgypbvk'xjqz")
+blank = 0
+pad_val = len(charlist)
+n_classes = len(charlist) + 1
 
-## model constants
+# decoder
+train_decoder = 'greedy' # both beam and greedy
+test_decoder = None
+beam_use_lm = True
+
+# beam_lm_weight = ...
+# beam_word_score = ...
+# beam_nbest = ...
+# beam_decoder_size = ...
+
+
+# model constants
 conformer_num_heads = 4
 conformer_ffn_dim = 144
 conformer_num_layers = 4
@@ -33,12 +43,13 @@ lstm_dim = 320
 
 # torch params 
 device = device("cuda")
-manual_seed(7)
+manual_seed(8)
 
-# train
-epochs = 10
-batch_size = 3
+# train params
+epochs = 30
+batch_size = 2
 
+# optimizer params
 max_learning_rate = 1e-4 
 scheduler_warmup_ratio = 1 / (3 * epochs)
 b1 = 0.9
@@ -46,7 +57,17 @@ b2 = 0.98
 epsilon = 1e-09
 
 # model save dir (in models folder)
-model_save_path = 'model_1'
+experiment_num = os.listdir('models')
+model_save_dir = os.path.join('models', 'experiment_' + str(len(experiment_num)))
+model_save_path = os.path.join(model_save_dir, 'epochs')
+if not os.path.exists(model_save_path):
+    os.makedirs(model_save_path)
+shutil.copy('constants.py', model_save_dir)
 
-# eval
-print_samples_n = None
+# predict
+model_path = None #'models/experiment_0/epochs/epoch_44.pth'
+
+# pandas eval display options
+print_samples_n = 10 # None if you don't want the display
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)

@@ -1,10 +1,12 @@
-from torch import tensor, transpose, tensor
-from torch.nn import Module, Sequential
-from torchaudio.transforms import MelSpectrogram, FrequencyMasking, TimeMasking
 from numpy import arange
+from torch.nn import Module, Sequential
 from torch.nn.utils.rnn import pad_sequence
+from torchaudio.models.decoder import ctc_decoder
+from torch import tensor, transpose, tensor, argmax, float32
+from torchaudio.transforms import MelSpectrogram, FrequencyMasking, TimeMasking
 
 from constants import *
+from utils import download_librispeech_kenlm_decoder_model
 
 
 # waveform to spectral augmentation
@@ -43,12 +45,20 @@ class WaveformTransform(Module):
 class TextTransform(Module):
     def __init__(self,):
         super(TextTransform, self).__init__()
+        files = download_librispeech_kenlm_decoder_model()
+        self.beam_search_decoder = ctc_decoder(
+                                lexicon=files.lexicon,
+                                tokens= charlist, #files.tokens,
+                                lm=files.lm if beam_use_lm else None,
+                                # nbest=beam_nbest,
+                                # beam_size=beam_decoder_size,
+                                # lm_weight=beam_lm_weight,
+                                # word_score=beam_word_score,
+                            )
+
         self.n_classes = n_classes
         self.chars = charlist
-        self.indices = arange(1, len(self.chars) + 1).tolist()
-        assert len(self.chars) == len(self.indices)
-        if blank in self.indices:
-            raise Exception('blank character mapping already in indices')
+        self.indices = arange(len(self.chars)).tolist()
         self.encode_map = dict(zip(self.chars, self.indices))
         self.decode_map = dict(zip(self.indices, self.chars))
         self.encode_map[''] = pad_val
@@ -58,23 +68,38 @@ class TextTransform(Module):
     def encode_sequence(self, sequence):
         final = []
         for char in sequence:
-            final.append(self.encode_map[char])
+            if char == ' ' or char == '|':
+                final.append(self.encode_map['|'])
+            else:
+                final.append(self.encode_map[char])
         out = tensor(final).to(device)
         return out
-        
-    def greedy_decode_sequence(self, sequence, preds=False):
-        if type(sequence) != list:
-            sequence = sequence.tolist()
-        final = []
-        for i, char in enumerate(sequence):
-            if char != blank:
-                if preds and decode_collapse and i != 0 and char == sequence[i - 1]:
-                    continue
-                final.append(self.decode_map[char])
-        return ''.join(final)
+                
+    def greedy_decode_sequences(self, sequences, label_lengths=None):
+        out = []
+        if label_lengths == None:
+            sequences = transpose(argmax(sequences, dim=-1), 0, 1).tolist()
+        else:
+            sequences = [sequences[i][:label_lengths[i]].tolist() for i in range(len(label_lengths))]
+        for sequence in sequences:
+            final = []
+            for i, char in enumerate(sequence):
+                if char != blank:
+                    if label_lengths == None and i != 0 and char == sequence[i - 1]:
+                        continue
+                    final.append(self.decode_map[char])
+            out.append(' '.join(''.join(final).split('|')))
+        return out
 
-    def beam_decode_sequence(self, sequence, preds=False):
-        raise NotImplementedError
+    def beam_decode_sequences(self, sequences):
+        sequences = sequences.permute(1, 0, 2)
+        sequences = sequences.type(float32).cpu()
+        results = self.beam_search_decoder(sequences)
+        out = []
+        for sample in results:
+            hypothesis = sample[0]
+            out.append(' '.join(hypothesis.words))
+        return out
 
 
 def data_processing(data, wav_trans, text_trans):

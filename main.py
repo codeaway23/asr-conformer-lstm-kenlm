@@ -1,25 +1,21 @@
 import os
+import wandb
+from torch.optim import Adam
 from torch.nn import CTCLoss
 from torch.utils.data import DataLoader
 from torchaudio.datasets import LIBRISPEECH
-
-from torch.optim import Adam
 from transformers.optimization import get_scheduler
 
-import wandb
-
-from data_proc import WaveformTransform, TextTransform
-from data_proc import data_processing
-
-from model import SpeechRegonitionModel
 
 from constants import *
 from train import train, test
+from model import SpeechRegonitionModel
+from data_proc import WaveformTransform, TextTransform, data_processing
 
 
 if __name__ == "__main__":
 
-    wandb.init(project="asr-conformer-lstm", entity="codeaway23")
+    wandb.init(project="asr-conformer-lstm-kenlm", entity="codeaway23")
 
 
     wav_train_trans = WaveformTransform()
@@ -76,13 +72,14 @@ if __name__ == "__main__":
                               num_training_steps = num_training_steps,
                         )
 
-    train(train_dataloader, 
+    model = train(train_dataloader, 
         model, 
         loss_fct, 
         optimizer, 
         scheduler,
         epochs,
-        text_trans)
+        text_trans,
+        test_dataloader=test_dataloader)
 
     test(test_dataloader,
          model,
